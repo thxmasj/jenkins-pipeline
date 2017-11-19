@@ -24,6 +24,7 @@ def call(body) {
                 when { expression { env.BRANCH_NAME.matches(/work\/(\w+-\w+)/) } }
                 agent any
                 steps {
+                    sh "test-script"
                     transitionIssue env.ISSUE_STATUS_OPEN, env.ISSUE_TRANSITION_START
                     ensureIssueStatusIs env.ISSUE_STATUS_IN_PROGRESS
                     script {
