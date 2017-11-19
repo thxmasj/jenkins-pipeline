@@ -24,6 +24,8 @@ def call(body) {
                 when { expression { env.BRANCH_NAME.matches(/work\/(\w+-\w+)/) } }
                 agent any
                 steps {
+                    echo "Hello, git SSH key is: ${params.gitSshKey}"
+                    echo "$params"
                     transitionIssue env.ISSUE_STATUS_OPEN, env.ISSUE_TRANSITION_START
                     ensureIssueStatusIs env.ISSUE_STATUS_IN_PROGRESS
                     script {
