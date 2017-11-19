@@ -26,7 +26,7 @@ def call(body) {
                 steps {
                     script {
                         def testScript = libraryResource 'test-script'
-                        writeFile file: 'test-script', text: textScript
+                        writeFile file: 'test-script', text: testScript
                         sh "test-script"
                     }
 //                    transitionIssue env.ISSUE_STATUS_OPEN, env.ISSUE_TRANSITION_START
