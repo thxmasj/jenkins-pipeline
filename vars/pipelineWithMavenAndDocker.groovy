@@ -27,7 +27,7 @@ def call(body) {
                     script {
                         def testScript = libraryResource 'test-script'
                         writeFile file: 'test-script', text: testScript
-                        sh "test-script"
+                        sh "./test-script"
                     }
 //                    transitionIssue env.ISSUE_STATUS_OPEN, env.ISSUE_TRANSITION_START
 //                    ensureIssueStatusIs env.ISSUE_STATUS_IN_PROGRESS
