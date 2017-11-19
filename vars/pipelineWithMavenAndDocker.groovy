@@ -24,19 +24,21 @@ def call(body) {
                 when { expression { env.BRANCH_NAME.matches(/work\/(\w+-\w+)/) } }
                 agent any
                 steps {
-                    def testScript = libraryResource 'test-script'
-                    writeFile file: 'test-script', text: textScript
-                    sh "test-script"
-                    transitionIssue env.ISSUE_STATUS_OPEN, env.ISSUE_TRANSITION_START
-                    ensureIssueStatusIs env.ISSUE_STATUS_IN_PROGRESS
                     script {
-                        currentBuild.description = "Building from commit " + readCommitId()
-                        env.MAVEN_OPTS = readProperties(file: 'Jenkinsfile.properties').MAVEN_OPTS
-                        if (readCommitMessage() == "ready!") {
-                            env.verification = 'true'
-                        }
+                        def testScript = libraryResource 'test-script'
+                        writeFile file: 'test-script', text: textScript
+                        sh "test-script"
                     }
-                    sh "mvn clean verify -B"
+//                    transitionIssue env.ISSUE_STATUS_OPEN, env.ISSUE_TRANSITION_START
+//                    ensureIssueStatusIs env.ISSUE_STATUS_IN_PROGRESS
+//                    script {
+//                        currentBuild.description = "Building from commit " + readCommitId()
+//                        env.MAVEN_OPTS = readProperties(file: 'Jenkinsfile.properties').MAVEN_OPTS
+//                        if (readCommitMessage() == "ready!") {
+//                            env.verification = 'true'
+//                        }
+//                    }
+//                    sh "mvn clean verify -B"
                 }
             }
             stage('Wait for verification to start') {
