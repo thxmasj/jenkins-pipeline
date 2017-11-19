@@ -6,20 +6,10 @@ import static java.time.ZonedDateTime.now
 
 def call(body) {
     // evaluate the body block, and collect configuration into the object
-    def pipelineParams= [:]
+    def params= [:]
     body.resolveStrategy = Closure.DELEGATE_FIRST
-    body.delegate = pipelineParams
+    body.delegate = params
     body()
-
-    def verificationHostName = 'eid-test-docker01.dmz.local'
-    def verificationHostUser = 'jenkins'
-    def verificationHostSshKey = 'ssh.git.difi.local'
-    def verificationStackName = 'krr'
-    def productionHostName = 'eid-prod-docker01.dmz.local'
-    def productionHostUser = 'jenkins'
-    def productionHostSshKey = 'ssh.git.difi.local'
-    def productionStackName = 'krr'
-    def gitSshKey = 'ssh.github.com'
 
     pipeline {
         agent none
@@ -58,7 +48,7 @@ def call(body) {
                 agent any
                 steps {
                     failIfJobIsAborted()
-                    sshagent([gitSshKey]) {
+                    sshagent([params.gitSshKey]) {
                         retry(count: 1000000) {
                             sleep 10
                             sh 'pipeline/git/available-verification-slot'
@@ -80,7 +70,7 @@ def call(body) {
                     script {
                         env.version = DateTimeFormatter.ofPattern('yyyy-MM-dd-HHmm').format(now(ZoneId.of('UTC'))) + "-" + readCommitId()
                         commitMessage = "${env.version}|" + issueId() + ": " + issueSummary()
-                        sshagent([gitSshKey]) {
+                        sshagent([params.gitSshKey]) {
                             verifyRevision = sh returnStdout: true, script: "pipeline/git/create-verification-revision \"${commitMessage}\""
                         }
                         sh "pipeline/create-review ${verifyRevision} ${env.crucible_USR} ${env.crucible_PSW}"
@@ -88,11 +78,11 @@ def call(body) {
                 }
                 post {
                     failure {
-                        deleteVerificationBranch()
+                        deleteVerificationBranch(params.gitSshKey)
                         transitionIssue env.ISSUE_STATUS_CODE_REVIEW, env.ISSUE_TRANSITION_RESUME_WORK
                     }
                     aborted {
-                        deleteVerificationBranch()
+                        deleteVerificationBranch(params.gitSshKey)
                         transitionIssue env.ISSUE_STATUS_CODE_REVIEW, env.ISSUE_TRANSITION_RESUME_WORK
                     }
                 }
@@ -119,11 +109,11 @@ def call(body) {
                 }
                 post {
                     failure {
-                        deleteVerificationBranch()
+                        deleteVerificationBranch(params.gitSshKey)
                         transitionIssue env.ISSUE_STATUS_CODE_REVIEW, env.ISSUE_TRANSITION_RESUME_WORK
                     }
                     aborted {
-                        deleteVerificationBranch()
+                        deleteVerificationBranch(params.gitSshKey)
                         transitionIssue env.ISSUE_STATUS_CODE_REVIEW, env.ISSUE_TRANSITION_RESUME_WORK
                     }
                 }
@@ -146,17 +136,17 @@ def call(body) {
                     failIfJobIsAborted()
                     script {
                         checkoutVerificationBranch()
-                        sshagent([gitSshKey]) {
+                        sshagent([params.gitSshKey]) {
                             sh 'git push origin HEAD:master'
                         }
                     }
                 }
                 post {
                     always {
-                        deleteVerificationBranch()
+                        deleteVerificationBranch(params.gitSshKey)
                     }
                     success {
-                        deleteWorkBranch()
+                        deleteWorkBranch(params.gitSshKey)
                     }
                     failure {
                         transitionIssue env.ISSUE_STATUS_CODE_REVIEW, env.ISSUE_TRANSITION_RESUME_WORK
@@ -188,10 +178,10 @@ def call(body) {
                     script {
                         currentBuild.description = "Deploying ${env.version} to verification environment"
                         DOCKER_HOST = sh(returnStdout: true, script: 'pipeline/docker/define-docker-host-for-ssh-tunnel')
-                        sshagent([verificationHostSshKey]) {
-                            sh "DOCKER_HOST=${DOCKER_HOST} pipeline/docker/create-ssh-tunnel-for-docker-host ${verificationHostUser}@${verificationHostName}"
+                        sshagent([params.verificationHostSshKey]) {
+                            sh "DOCKER_HOST=${DOCKER_HOST} pipeline/docker/create-ssh-tunnel-for-docker-host ${params.verificationHostUser}@${params.verificationHostName}"
                         }
-                        sh "DOCKER_TLS_VERIFY= DOCKER_HOST=${DOCKER_HOST} docker/run ${env.nexus_USR} ${env.nexus_PSW} ${verificationStackName} ${env.version}"
+                        sh "DOCKER_TLS_VERIFY= DOCKER_HOST=${DOCKER_HOST} docker/run ${env.nexus_USR} ${env.nexus_PSW} ${params.verificationStackName} ${env.version}"
                     }
                 }
                 post {
@@ -224,10 +214,10 @@ def call(body) {
                     script {
                         currentBuild.description = "Deploying ${env.version} to production environment"
                         DOCKER_HOST = sh(returnStdout: true, script: 'pipeline/docker/define-docker-host-for-ssh-tunnel')
-                        sshagent([productionHostSshKey]) {
-                            sh "DOCKER_HOST=${DOCKER_HOST} pipeline/docker/create-ssh-tunnel-for-docker-host ${productionHostUser}@${productionHostName}"
+                        sshagent([params.productionHostSshKey]) {
+                            sh "DOCKER_HOST=${DOCKER_HOST} pipeline/docker/create-ssh-tunnel-for-docker-host ${params.productionHostUser}@${params.productionHostName}"
                         }
-                        sh "DOCKER_TLS_VERIFY= DOCKER_HOST=${DOCKER_HOST} docker/run ${env.nexus_USR} ${env.nexus_PSW} ${productionStackName} ${env.version}"
+                        sh "DOCKER_TLS_VERIFY= DOCKER_HOST=${DOCKER_HOST} docker/run ${env.nexus_USR} ${env.nexus_PSW} ${params.productionStackName} ${env.version}"
                     }
                 }
                 post {
@@ -267,14 +257,14 @@ def checkoutVerificationBranch() {
     sh "git reset --hard origin/verify/\${BRANCH_NAME}"
 }
 
-def deleteVerificationBranch() {
+def deleteVerificationBranch(String sshKey) {
     echo "Deleting verification branch"
-    sshagent(['ssh.github.com']) { sh "git push origin --delete verify/\${BRANCH_NAME}" }
+    sshagent([sshKey]) { sh "git push origin --delete verify/\${BRANCH_NAME}" }
     echo "Verification branch deleted"
 }
 
-def deleteWorkBranch() {
-    sshagent(['ssh.github.com']) { sh "git push origin --delete \${BRANCH_NAME}" }
+def deleteWorkBranch(String sshKey) {
+    sshagent([sshKey]) { sh "git push origin --delete \${BRANCH_NAME}" }
 }
 
 def failIfJobIsAborted() {
